@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>FSTA</title>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+      body {
+        background-color: #1c1c1c;
+        color: #f0f0f0;
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+      }
+
+      h3 {
+        margin: 0;
+        color: #00ffcc;
+        font-size: 2em;
+      }
+
+      .download-btn,
+      .location-btn,
+      .start-btn {
+        background-color: #00ffcc;
+        color: #333;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1em;
+        transition: background-color 0.3s, color 0.3s;
+        border: 2px solid #333;
+        margin-left: 10px;
+      }
+
+      .download-btn:hover,
+      .location-btn:hover,
+      .start-btn:hover {
+        background-color: #333;
+        color: #00ffcc;
+      }
+
+      .file-inputs {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 10px;
+      }
+
+      .file-input-cell {
+        margin: 0 0;
+        text-align: center;
+      }
+
+      .file-inputs input[type="file"] {
+        display: none;
+      }
+
+      .file-inputs label {
+        display: inline-block;
+        padding: 10px 20px;
+        margin: 5px;
+        background-color: #333;
+        color: #00ffcc;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s, color 0.3s;
+        border: 2px solid #00ffcc;
+        font-size: 1em;
+      }
+
+      .file-inputs label:hover {
+        background-color: #00ffcc;
+        color: #333;
+      }
+
+      .file-name {
+        display: block;
+        margin-top: 5px;
+        color: #00ffcc;
+        font-size: 0.8em;
+        font-family: "Courier New", monospace;
+      }
+
+      #map {
+        height: 75vh;
+        width: 100%;
+        border-top: 5px solid #00ffcc;
+      }
+
+      @media (min-width: 768px) {
+        #map {
+          height: 80vh;
+        }
+
+        h1 {
+          font-size: 1.5em;
+        }
+      }
+
+      /* Add animation keyframes for the start button */
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.1);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      .start-btn.animate {
+        animation: pulse 0.5s ease-in-out;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h3>FSTA</h3>
+      <div>
+        <button
+          class="download-btn"
+          onclick="window.open('http://192.168.1.1/fs', '_blank')"
+        >
+          Download
+        </button>
+        <!-- <button class="location-btn" onclick="showLocation()">i</button> -->
+        <button class="start-btn" onclick="startAnimation()">Start</button>
+      </div>
+    </div>
+    <div class="file-inputs">
+      <div class="file-input-cell">
+        <input type="file" id="fileInput1" />
+        <label for="fileInput1">Red</label>
+        <span id="fileName1" class="file-name"></span>
+      </div>
+      <div class="file-input-cell">
+        <input type="file" id="fileInput2" />
+        <label for="fileInput2">Blue</label>
+        <span id="fileName2" class="file-name"></span>
+      </div>
+      <div class="file-input-cell">
+        <input type="file" id="fileInput3" />
+        <label for="fileInput3">Green</label>
+        <span id="fileName3" class="file-name"></span>
+      </div>
+      <div class="file-input-cell">
+        <input type="file" id="fileInput4" />
+        <label for="fileInput4">Yellow</label>
+        <span id="fileName4" class="file-name"></span>
+      </div>
+    </div>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+      var map = L.map("map").setView(
+        [0.8969245069042304, 101.1732011783869],
+        14
+      );
+
+      L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        {
+          maxZoom: 18,
+        }
+      ).addTo(map);
+
+      var polylines = {};
+      var animationMarker = null;
+      var animationInterval = null;
+
+      function showLocation() {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            function (position) {
+              var lat = position.coords.latitude;
+              var lon = position.coords.longitude;
+              map.setView([lat, lon], 15);
+              L.marker([lat, lon])
+                .addTo(map)
+                .bindPopup("You are here!")
+                .openPopup();
+            },
+            function (error) {
+              alert("Error retrieving location: " + error.message);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000, // 10 seconds
+              maximumAge: 0,
+            }
+          );
+        } else {
+          alert("Geolocation is not supported by this browser.");
+        }
+      }
+
+      function handleFileInput(event, color, id, fileNameId) {
+        var file = event.target.files[0];
+        var reader = new FileReader();
+
+        reader.onload = function (e) {
+          var text = e.target.result;
+          var lines = text.split("\n");
+          var coordinates = [];
+          var stopPoints = [];
+          var windowPoints = [];
+
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (line.trim()) {
+              var parts = line.split(";");
+              var lat = parseFloat(parts[2]);
+              var lon = parseFloat(parts[3]);
+              var timestamp = new Date(parts[1]);
+
+              if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+                coordinates.push([lat, lon, timestamp]);
+                windowPoints.push([lat, lon, timestamp]);
+
+                // Remove points older than 4 minutes from the sliding window
+                var currentTime = timestamp.getTime();
+                windowPoints = windowPoints.filter(function (point) {
+                  return currentTime - point[2].getTime() <= 240000;
+                });
+
+                // Determine the bounds of the sliding window
+                var minLat = Math.min(...windowPoints.map((p) => p[0]));
+                var maxLat = Math.max(...windowPoints.map((p) => p[0]));
+                var minLon = Math.min(...windowPoints.map((p) => p[1]));
+                var maxLon = Math.max(...windowPoints.map((p) => p[1]));
+
+                // Check if the distance between min and max points is within 10 meters
+                var isStopped = windowPoints.every(function (point) {
+                  return (
+                    getDistanceFromLatLonInMeters(
+                      minLat,
+                      minLon,
+                      point[0],
+                      point[1]
+                    ) <= 10 &&
+                    getDistanceFromLatLonInMeters(
+                      maxLat,
+                      maxLon,
+                      point[0],
+                      point[1]
+                    ) <= 10
+                  );
+                });
+
+                if (isStopped && windowPoints.length > 1) {
+                  stopPoints.push([lat, lon]);
+                }
+              }
+            }
+          }
+
+          if (coordinates.length > 0) {
+            if (polylines[id]) {
+              map.removeLayer(polylines[id]);
+            }
+
+            polylines[id] = L.polyline(
+              coordinates.map((coord) => [coord[0], coord[1]]),
+              { color: color }
+            ).addTo(map);
+            map.fitBounds(polylines[id].getBounds());
+          }
+
+          stopPoints.forEach(function (stop) {
+            L.circle(stop, { radius: 10, color: "pink" }).addTo(map);
+          });
+
+          document.getElementById(fileNameId).innerText =
+            file.name.split("_")[0];
+        };
+
+        reader.readAsText(file);
+      }
+
+      document
+        .getElementById("fileInput1")
+        .addEventListener("change", function (event) {
+          handleFileInput(event, "red", 1, "fileName1");
+        });
+      document
+        .getElementById("fileInput2")
+        .addEventListener("change", function (event) {
+          handleFileInput(event, "blue", 2, "fileName2");
+        });
+      document
+        .getElementById("fileInput3")
+        .addEventListener("change", function (event) {
+          handleFileInput(event, "green", 3, "fileName3");
+        });
+      document
+        .getElementById("fileInput4")
+        .addEventListener("change", function (event) {
+          handleFileInput(event, "yellow", 4, "fileName4");
+        });
+
+      function startAnimation() {
+        var startBtn = document.querySelector(".start-btn");
+        startBtn.classList.add("animate");
+
+        setTimeout(function () {
+          startBtn.classList.remove("animate");
+        }, 500);
+
+        // Clear any existing animation
+        if (animationInterval) {
+          clearInterval(animationInterval);
+          map.removeLayer(animationMarker);
+        }
+
+        var polyline = polylines[1]; // Assuming you want to animate along the first polyline (id 1)
+        if (!polyline) {
+          alert("No polyline available for animation.");
+          return;
+        }
+
+        var coordinates = polyline.getLatLngs();
+        var index = 0;
+
+        // Create a marker to animate along the polyline
+        animationMarker = L.marker(coordinates[index]).addTo(map);
+
+        animationInterval = setInterval(function () {
+          index++;
+          if (index < coordinates.length) {
+            animationMarker.setLatLng(coordinates[index]);
+          } else {
+            clearInterval(animationInterval);
+          }
+        }, 5); // Adjust the speed by changing the interval time
+      }
+
+      function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+        var R = 6371; // Radius of the earth in km
+        var dLat = deg2rad(lat2 - lat1);
+        var dLon = deg2rad(lon2 - lon1);
+        var a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(deg2rad(lat1)) *
+            Math.cos(deg2rad(lat2)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        var d = R * c * 1000; // Distance in meters
+        return d;
+      }
+
+      function deg2rad(deg) {
+        return deg * (Math.PI / 180);
+      }
+    </script>
+  </body>
+</html>
